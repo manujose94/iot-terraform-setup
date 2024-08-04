@@ -1,0 +1,58 @@
+name: Terraform Verify and tfsec Security Check
+
+on:
+  pull_request:
+    paths:
+      - 'infrastructure/environments/dev/apps/**'
+      - 'infrastructure/environments/dev/cluster/**'
+      - 'infrastructure/environments/test/apps/**'
+      - 'infrastructure/environments/test/cluster/**'
+  push:
+    paths:
+      - 'infrastructure/environments/dev/apps/**'
+      - 'infrastructure/environments/dev/cluster/**'
+      - 'infrastructure/environments/test/apps/**'
+      - 'infrastructure/environments/test/cluster/**'
+
+jobs:
+  terraform-verify:
+    name: Verify Terraform
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up environment
+        id: setup
+        run: echo "CHANGED_DIRS=$(git diff --name-only ${{ github.base_ref }} ${{ github.head_ref }} | grep 'infrastructure/' | awk -F '/' '{print $1"/"$2"/"$3"/"$4}' | uniq)" >> $GITHUB_ENV
+    
+      - name: Terraform Init and Validate
+        run: |
+          for dir in ${{ env.CHANGED_DIRS }}; do
+            echo "Processing directory: $dir"
+            cd $dir
+            terraform init
+            terraform validate
+            cd - > /dev/null
+          done
+
+  tfsec:
+    name: Run tfsec Security Check
+    runs-on: ubuntu-latest
+    needs: terraform-verify
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up environment
+        id: setup
+        run: echo "CHANGED_DIRS=$(git diff --name-only ${{ github.base_ref }} ${{ github.head_ref }} | grep 'infrastructure/' | awk -F '/' '{print $1"/"$2"/"$3"/"$4}' | uniq)" >> $GITHUB_ENV
+
+      - name: Run tfsec
+        run: |
+          for dir in ${{ env.CHANGED_DIRS }}; do
+            echo "Running tfsec on directory: $dir"
+            tfsec $dir
+          done
